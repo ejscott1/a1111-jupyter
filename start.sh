@@ -57,11 +57,9 @@ fi
 echo "[Deps] Installing A1111 requirements..."
 pip install -r "${WEBUI_DIR}/requirements_versions.txt" || pip install -r "${WEBUI_DIR}/requirements.txt"
 
-# --- Jupyter compatibility fix ---
-# A1111 pins httpx/httpcore/lark to older versions; JupyterLab 4.x needs newer.
-# Re-upgrade just what Jupyter requires without blowing up A1111 pins.
+# --- Jupyter compatibility fix (after A1111 pins older deps) ---
 echo "[Deps] Reconciling Jupyter deps (httpx/httpcore/lark/jupyterlab)..."
-pip install "httpx>=0.25,<1" "httpcore>=0.15,<1" "lark>=1.2.2" "jupyterlab>=4,<5"
+pip install --upgrade "httpx>=0.25,<1" "httpcore>=0.15,<1" "lark>=1.2.2" "jupyterlab>=4,<5"
 
 # ========= Link A1111 dirs to persistent storage =========
 for d in embeddings configs; do
@@ -94,6 +92,10 @@ if [ "${ENABLE_JUPYTER}" = "1" ]; then
     --ServerApp.port="${JUPYTER_PORT}" \
     --ServerApp.open_browser=False \
     --ServerApp.token="${JUPYTER_TOKEN}" \
+    --ServerApp.allow_remote_access=True \
+    --ServerApp.trust_xheaders=True \
+    --ServerApp.base_url=/ \
+    --ServerApp.quit_button=False \
     > "${DATA_DIR}/logs/jupyter.log" 2>&1 &
 fi
 
