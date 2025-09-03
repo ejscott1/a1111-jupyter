@@ -14,7 +14,7 @@ export SKIP_GIT_UPDATE="${SKIP_GIT_UPDATE:-0}"
 # Jupyter
 export ENABLE_JUPYTER="${ENABLE_JUPYTER:-1}"
 export JUPYTER_PORT="${JUPYTER_PORT:-8888}"
-export JUPYTER_TOKEN="${JUPYTER_TOKEN:-}"   # empty = no token
+export JUPYTER_TOKEN="${JUPYTER_TOKEN:-}"   # empty = auto-generated
 export JUPYTER_VENV="${JUPYTER_VENV:-/opt/jvenv}"
 export JUPYTER_BIN="${JUPYTER_BIN:-${JUPYTER_VENV}/bin/jupyter}"
 
@@ -85,22 +85,31 @@ if [ "${ENABLE_JUPYTER}" = "1" ]; then
     echo "[Jupyter] Creating isolated venv at ${JUPYTER_VENV} ..."
     python3 -m venv "${JUPYTER_VENV}"
     "${JUPYTER_VENV}/bin/pip" install --upgrade pip wheel setuptools
-    # Install JupyterLab and its deps independently of A1111 pins
     "${JUPYTER_VENV}/bin/pip" install "jupyterlab>=4,<5" "httpx>=0.25,<1" "httpcore>=0.15,<1" "lark>=1.2.2"
   fi
-  echo "[Jupyter] Starting on 0.0.0.0:${JUPYTER_PORT} (token: ${JUPYTER_TOKEN:-<none>})"
+
+  # Generate token if not provided
+  if [ -z "${JUPYTER_TOKEN}" ]; then
+    JUPYTER_TOKEN="$(head -c 16 /dev/urandom | xxd -p)"
+    echo "[Jupyter] Generated token: ${JUPYTER_TOKEN}"
+  fi
+
+  echo "[Jupyter] Starting on 0.0.0.0:${JUPYTER_PORT} (token: ${JUPYTER_TOKEN})"
   nohup "${JUPYTER_BIN}" lab \
     --NotebookApp.notebook_dir="${DATA_DIR}" \
     --ServerApp.root_dir="${DATA_DIR}" \
-    --ServerApp.allow_origin="*" \
     --ServerApp.ip=0.0.0.0 \
     --ServerApp.port="${JUPYTER_PORT}" \
     --ServerApp.open_browser=False \
     --ServerApp.token="${JUPYTER_TOKEN}" \
+    --ServerApp.base_url=/ \
     --ServerApp.allow_remote_access=True \
     --ServerApp.trust_xheaders=True \
-    --ServerApp.base_url=/ \
+    --ServerApp.allow_origin="*" \
+    --ServerApp.allow_origin_pat=".*" \
+    --ServerApp.disable_check_xsrf=True \
     --ServerApp.quit_button=False \
+    --allow-root \
     > "${DATA_DIR}/logs/jupyter.log" 2>&1 &
 fi
 
@@ -111,7 +120,7 @@ cat <<EOF
  - Checkpoints:        ${DATA_DIR}/models/Stable-diffusion
  - Outputs:            ${DATA_DIR}/outputs
  - Configs (persist):  ${DATA_DIR}/configs/${SD15_YAML_NAME} $( [ -s "${DATA_DIR}/configs/${SD15_YAML_NAME}" ] && echo "(OK)" || echo "(missing)" )
- - Jupyter:            $( [ "${ENABLE_JUPYTER}" = "1" ] && echo "http://<pod-host>:${JUPYTER_PORT} (token: ${JUPYTER_TOKEN:-<none>})" || echo "disabled" )
+ - Jupyter:            $( [ "${ENABLE_JUPYTER}" = "1" ] && echo "http://<pod-host>:${JUPYTER_PORT}/?token=${JUPYTER_TOKEN}" || echo "disabled" )
 
 [Launch]
  python launch.py ${WEBUI_ARGS}
