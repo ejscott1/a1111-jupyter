@@ -5,7 +5,7 @@ set -euo pipefail
 export WEBUI_DIR="${WEBUI_DIR:-/opt/webui}"
 export DATA_DIR="${DATA_DIR:-/workspace/a1111-data}"
 export PORT="${PORT:-7860}"
-export WEBUI_ARGS="${WEBUI_ARGS:-"--listen --port ${PORT} --api --data-dir ${DATA_DIR}"}"
+export WEBUI_ARGS="${WEBUI_ARGS:-"--listen --port ${PORT} --api --data-dir ${DATA_DIR} --enable-insecure-extension-access"}"
 
 # A1111 git behavior
 export WEBUI_COMMIT="${WEBUI_COMMIT:-}"     # optional commit SHA to pin
@@ -14,7 +14,9 @@ export SKIP_GIT_UPDATE="${SKIP_GIT_UPDATE:-0}"
 # Jupyter
 export ENABLE_JUPYTER="${ENABLE_JUPYTER:-1}"
 export JUPYTER_PORT="${JUPYTER_PORT:-8888}"
-export JUPYTER_TOKEN="${JUPYTER_TOKEN:-}"   # set at runtime for auth; empty = no token
+export JUPYTER_TOKEN="${JUPYTER_TOKEN:-}"   # empty = no token
+export JUPYTER_VENV="${JUPYTER_VENV:-/opt/jvenv}"
+export JUPYTER_BIN="${JUPYTER_BIN:-${JUPYTER_VENV}/bin/jupyter}"
 
 # SD1.5 config
 SD15_YAML_NAME="v1-inference.yaml"
@@ -53,13 +55,9 @@ if [ -n "${WEBUI_COMMIT}" ]; then
   git -C "${WEBUI_DIR}" reset --hard "${WEBUI_COMMIT}"
 fi
 
-# ========= Python deps =========
+# ========= Python deps for A1111 =========
 echo "[Deps] Installing A1111 requirements..."
 pip install -r "${WEBUI_DIR}/requirements_versions.txt" || pip install -r "${WEBUI_DIR}/requirements.txt"
-
-# --- Jupyter compatibility fix (after A1111 pins older deps) ---
-echo "[Deps] Reconciling Jupyter deps (httpx/httpcore/lark/jupyterlab)..."
-pip install --upgrade "httpx>=0.25,<1" "httpcore>=0.15,<1" "lark>=1.2.2" "jupyterlab>=4,<5"
 
 # ========= Link A1111 dirs to persistent storage =========
 for d in embeddings configs; do
@@ -81,10 +79,17 @@ fi
 mkdir -p "${WEBUI_DIR}/configs"
 [ -s "${DATA_DIR}/configs/${SD15_YAML_NAME}" ] && cp -f "${DATA_DIR}/configs/${SD15_YAML_NAME}" "${WEBUI_DIR}/configs/${SD15_YAML_NAME}" || true
 
-# ========= JupyterLab (optional) =========
+# ========= JupyterLab in ISOLATED VENV =========
 if [ "${ENABLE_JUPYTER}" = "1" ]; then
+  if [ ! -x "${JUPYTER_BIN}" ]; then
+    echo "[Jupyter] Creating isolated venv at ${JUPYTER_VENV} ..."
+    python3 -m venv "${JUPYTER_VENV}"
+    "${JUPYTER_VENV}/bin/pip" install --upgrade pip wheel setuptools
+    # Install JupyterLab and its deps independently of A1111 pins
+    "${JUPYTER_VENV}/bin/pip" install "jupyterlab>=4,<5" "httpx>=0.25,<1" "httpcore>=0.15,<1" "lark>=1.2.2"
+  fi
   echo "[Jupyter] Starting on 0.0.0.0:${JUPYTER_PORT} (token: ${JUPYTER_TOKEN:-<none>})"
-  nohup jupyter lab \
+  nohup "${JUPYTER_BIN}" lab \
     --NotebookApp.notebook_dir="${DATA_DIR}" \
     --ServerApp.root_dir="${DATA_DIR}" \
     --ServerApp.allow_origin="*" \
