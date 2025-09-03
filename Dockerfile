@@ -44,6 +44,7 @@ RUN chmod +x /opt/start.sh
 # Defaults
 ENV WEBUI_ARGS="--listen --port ${PORT} --api --data-dir ${DATA_DIR}"
 ENV ENABLE_JUPYTER=1 \
-    JUPYTER_TOKEN= # set at runtime (recommended)
+    JUPYTER_TOKEN=
+# ^ JUPYTER_TOKEN is left blank; override with -e JUPYTER_TOKEN=... at runtime
 
 CMD ["/opt/start.sh"]
