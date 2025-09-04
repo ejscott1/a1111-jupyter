@@ -5,9 +5,9 @@ set -euo pipefail
 export WEBUI_DIR="${WEBUI_DIR:-/opt/webui}"
 export DATA_DIR="${DATA_DIR:-/workspace/a1111-data}"
 export PORT="${PORT:-7860}"
-export WEBUI_ARGS="${WEBUI_ARGS:-"--listen --port ${PORT} --api --data-dir ${DATA_DIR} --enable-insecure-extension-access"}"
+export WEBUI_ARGS="${WEBUI_ARGS:-"--listen --port ${PORT} --api --data-dir ${DATA_DIR} --enable-insecure-extension-access --xformers"}"
 
-# A1111 git behavior
+# A1111 repo behavior
 export WEBUI_COMMIT="${WEBUI_COMMIT:-}"     # optional commit SHA to pin
 export SKIP_GIT_UPDATE="${SKIP_GIT_UPDATE:-0}"
 
@@ -16,6 +16,8 @@ export ENABLE_JUPYTER="${ENABLE_JUPYTER:-1}"
 export JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 export JUPYTER_VENV="${JUPYTER_VENV:-/opt/jvenv}"
 export JUPYTER_BIN="${JUPYTER_BIN:-${JUPYTER_VENV}/bin/jupyter}"
+# Show /workspace by default; set JUPYTER_ROOT=${DATA_DIR} to hide parent
+export JUPYTER_ROOT="${JUPYTER_ROOT:-/workspace}"
 
 # SD1.5 config
 SD15_YAML_NAME="v1-inference.yaml"
@@ -65,7 +67,6 @@ link_safe() {
   rm -rf "$link"
   ln -s "$target" "$link"
 }
-
 link_safe "$WEBUI_DIR/models/Stable-diffusion" "$DATA_DIR/models/Stable-diffusion"
 link_safe "$WEBUI_DIR/models/Lora" "$DATA_DIR/models/Lora"
 link_safe "$WEBUI_DIR/models/VAE" "$DATA_DIR/models/VAE"
@@ -98,8 +99,8 @@ if [ "${ENABLE_JUPYTER}" = "1" ]; then
 
   echo "[Jupyter] Starting on 0.0.0.0:${JUPYTER_PORT} (no token, open access)"
   nohup "${JUPYTER_BIN}" lab \
-    --NotebookApp.notebook_dir="${DATA_DIR}" \
-    --ServerApp.root_dir="${DATA_DIR}" \
+    --NotebookApp.notebook_dir="${JUPYTER_ROOT}" \
+    --ServerApp.root_dir="${JUPYTER_ROOT}" \
     --ServerApp.ip=0.0.0.0 \
     --ServerApp.port="${JUPYTER_PORT}" \
     --ServerApp.open_browser=False \
