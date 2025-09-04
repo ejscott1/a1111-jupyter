@@ -58,11 +58,20 @@ fi
 echo "[Deps] Installing A1111 requirements..."
 pip install -r "${WEBUI_DIR}/requirements_versions.txt" || pip install -r "${WEBUI_DIR}/requirements.txt"
 
-# ========= Link A1111 dirs to persistent storage =========
-for d in embeddings configs; do
-  [ -e "${WEBUI_DIR}/${d}" ] && rm -rf "${WEBUI_DIR:?}/${d}"
-  ln -s "${DATA_DIR}/${d}" "${WEBUI_DIR}/${d}"
-done
+# ========= Ensure symlinks to persistent storage =========
+link_safe() {
+  local link=$1
+  local target=$2
+  rm -rf "$link"
+  ln -s "$target" "$link"
+}
+
+link_safe "$WEBUI_DIR/models/Stable-diffusion" "$DATA_DIR/models/Stable-diffusion"
+link_safe "$WEBUI_DIR/models/Lora" "$DATA_DIR/models/Lora"
+link_safe "$WEBUI_DIR/models/VAE" "$DATA_DIR/models/VAE"
+link_safe "$WEBUI_DIR/outputs" "$DATA_DIR/outputs"
+link_safe "$WEBUI_DIR/configs" "$DATA_DIR/configs"
+link_safe "$WEBUI_DIR/embeddings" "$DATA_DIR/embeddings"
 
 # ========= SD 1.5 YAML (optional) =========
 if [ ! -f "${DATA_DIR}/configs/${SD15_YAML_NAME}" ]; then
@@ -78,7 +87,7 @@ fi
 mkdir -p "${WEBUI_DIR}/configs"
 [ -s "${DATA_DIR}/configs/${SD15_YAML_NAME}" ] && cp -f "${DATA_DIR}/configs/${SD15_YAML_NAME}" "${WEBUI_DIR}/configs/${SD15_YAML_NAME}" || true
 
-# ========= JupyterLab in ISOLATED VENV =========
+# ========= JupyterLab in ISOLATED VENV (no-token mode) =========
 if [ "${ENABLE_JUPYTER}" = "1" ]; then
   if [ ! -x "${JUPYTER_BIN}" ]; then
     echo "[Jupyter] Creating isolated venv at ${JUPYTER_VENV} ..."
