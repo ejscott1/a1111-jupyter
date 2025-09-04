@@ -13,27 +13,32 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # OS deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip git wget curl ca-certificates \
-    libgl1 libglib2.0-0 ffmpeg tzdata pciutils && \
+    libgl1 libglib2.0-0 ffmpeg tzdata pciutils xxd && \
     rm -rf /var/lib/apt/lists/*
 
 # Python venv
 RUN python3 -m venv $VENV_DIR
 ENV PATH="$VENV_DIR/bin:$PATH"
 
-# PyTorch (CUDA 12.1)
+# PyTorch (CUDA 12.1) + xFormers (cu121 wheels)
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
-        torch torchvision torchaudio
+    pip install --index-url https://download.pytorch.org/whl/cu121 \
+        torch torchvision torchaudio && \
+    pip install --index-url https://download.pytorch.org/whl/cu121 \
+        xformers
 
-# JupyterLab
-RUN pip install jupyterlab==4.*
+# 🔧 Quiet + stability env (fewer warnings, stabler allocator)
+ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128" \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    TOKENIZERS_PARALLELISM=false
 
-# Only pre-create persistent data dir (let start.sh clone A1111)
+# (Optional) extras: face restore + upscale (uncomment if you want them baked in)
+# RUN pip install realesrgan gfpgan basicsr
+
+# Pre-create persistent data dir (A1111 repo is cloned at runtime)
 RUN mkdir -p $DATA_DIR
 
-EXPOSE 7860 8888
-
-# Healthcheck (A1111)
+# Healthcheck for A1111
 HEALTHCHECK --interval=30s --timeout=60s --start-period=60s --retries=10 \
   CMD curl -fsSL "http://localhost:${PORT}/" >/dev/null || exit 1
 
@@ -42,9 +47,10 @@ COPY start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
 
 # Defaults
-ENV WEBUI_ARGS="--listen --port ${PORT} --api --data-dir ${DATA_DIR}"
-ENV ENABLE_JUPYTER=1 \
-    JUPYTER_TOKEN=
-# ^ JUPYTER_TOKEN is left blank; override with -e JUPYTER_TOKEN=... at runtime
+ENV WEBUI_ARGS="--listen --port ${PORT} --api --data-dir ${DATA_DIR} --enable-insecure-extension-access --xformers" \
+    ENABLE_JUPYTER=1 \
+    JUPYTER_TOKEN= \
+    JUPYTER_PORT=8888
 
+EXPOSE 7860 8888
 CMD ["/opt/start.sh"]
