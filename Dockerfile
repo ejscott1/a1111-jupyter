@@ -1,3 +1,4 @@
+# ---------- Base ----------
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -10,43 +11,60 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PORT=7860 \
     JUPYTER_PORT=8888
 
-# OS deps
+# ---------- OS deps ----------
+# - build-essential/cmake: lets wheels compile if prebuilt wheels are unavailable
+# - git-lfs: makes pulling large model files easier (optional but handy)
+# - libgl1, libglib2.0-0, ffmpeg: common runtime deps for cv/vis stuff
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip git wget curl ca-certificates \
-    libgl1 libglib2.0-0 ffmpeg tzdata pciutils xxd && \
-    rm -rf /var/lib/apt/lists/*
+    python3 python3-venv python3-pip \
+    git git-lfs wget curl ca-certificates \
+    build-essential cmake \
+    libopenblas-dev liblapack-dev \
+    libgl1 libglib2.0-0 ffmpeg tzdata pciutils xxd \
+ && rm -rf /var/lib/apt/lists/*
 
-# Python venv
+# ---------- Python venv ----------
 RUN python3 -m venv $VENV_DIR
 ENV PATH="$VENV_DIR/bin:$PATH"
 
-# PyTorch (CUDA 12.1) + xFormers (cu121 wheels)
+# ---------- PyTorch (CUDA 12.1) + xFormers ----------
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --index-url https://download.pytorch.org/whl/cu121 \
         torch torchvision torchaudio && \
     pip install --index-url https://download.pytorch.org/whl/cu121 \
         xformers
 
-# 🔧 Quiet + stability env (fewer warnings, stabler allocator)
+# ---------- CV / InsightFace stack (for FaceID/IP-Adapter) ----------
+# Notes:
+# - pin numpy<2 because many wheels (onnxruntime/opencv) are still commonly tested on 1.x
+# - onnxruntime (CPU) is fine for InsightFace; keep it matching stable combos
+# - opencv-python-headless avoids pulling X11/GUI junk
+RUN pip install \
+      "numpy<2" \
+      "onnxruntime==1.16.3" \
+      "opencv-python-headless==4.8.0.76" \
+      "insightface>=0.7.3"
+
+# ---------- QoL env ----------
 ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128" \
     HF_HUB_DISABLE_TELEMETRY=1 \
     TOKENIZERS_PARALLELISM=false
 
-# (Optional) extras: face restore + upscale (uncomment if you want them baked in)
+# (Optional) extras: face restore + upscale
 # RUN pip install realesrgan gfpgan basicsr
 
-# Pre-create persistent data dir (A1111 repo is cloned at runtime)
+# ---------- Persistent data dir ----------
 RUN mkdir -p $DATA_DIR
 
-# Healthcheck for A1111
+# ---------- Healthcheck ----------
 HEALTHCHECK --interval=30s --timeout=60s --start-period=60s --retries=10 \
   CMD curl -fsSL "http://localhost:${PORT}/" >/dev/null || exit 1
 
-# Startup
+# ---------- Startup ----------
 COPY start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
 
-# Defaults
+# ---------- Defaults ----------
 ENV WEBUI_ARGS="--listen --port ${PORT} --api --data-dir ${DATA_DIR} --enable-insecure-extension-access --xformers" \
     ENABLE_JUPYTER=1 \
     JUPYTER_TOKEN= \
