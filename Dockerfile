@@ -12,10 +12,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # OS deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip git git-lfs wget curl ca-certificates \
-    build-essential cmake libopenblas-dev liblapack-dev \
-    libgl1 libglib2.0-0 ffmpeg tzdata pciutils xxd \
-    && rm -rf /var/lib/apt/lists/*
+    python3 python3-venv python3-pip git wget curl ca-certificates \
+    libgl1 libglib2.0-0 ffmpeg tzdata pciutils xxd && \
+    rm -rf /var/lib/apt/lists/*
 
 # Python venv
 RUN python3 -m venv $VENV_DIR
@@ -28,22 +27,18 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install --index-url https://download.pytorch.org/whl/cu121 \
         xformers
 
-# InsightFace + ONNXRuntime + dependencies
-RUN pip install onnxruntime-gpu==1.16.3 && \
-    pip install insightface==0.7.3
-
-# 🔧 Quiet + stability env
+# ðŸ”§ Quiet + stability env (fewer warnings, stabler allocator)
 ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128" \
     HF_HUB_DISABLE_TELEMETRY=1 \
     TOKENIZERS_PARALLELISM=false
 
-# Optional extras: face restore + upscale
+# (Optional) extras: face restore + upscale (uncomment if you want them baked in)
 # RUN pip install realesrgan gfpgan basicsr
 
 # Pre-create persistent data dir (A1111 repo is cloned at runtime)
 RUN mkdir -p $DATA_DIR
 
-# Healthcheck
+# Healthcheck for A1111
 HEALTHCHECK --interval=30s --timeout=60s --start-period=60s --retries=10 \
   CMD curl -fsSL "http://localhost:${PORT}/" >/dev/null || exit 1
 
